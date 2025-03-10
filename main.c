@@ -134,14 +134,13 @@ int main(const int argc, const char **argv)
                 else if (client_pollfd[i].revents & POLLIN)
                 {
                     read(clients[i].sock, buffer, sizeof(buffer) - 1);
-                    printf("Received: %s", buffer);
 
                     if (clients[i].username == NULL)
                     {
                         buffer[strlen(buffer) - 2] = '\0';
-                        printf(buffer);
                         clients[i].username = malloc(strlen(buffer) + 1);
                         strcpy(clients[i].username, buffer);
+                        printf("Received username from client: %s\n", buffer);
                         continue;
                     }
                     for (int j = 0; j < connected_clients; j++)
@@ -151,9 +150,16 @@ int main(const int argc, const char **argv)
 
                         char* tmp = malloc(2 + strlen(clients[j].username) + 1);
 
+                        if (buffer[strlen(buffer) - 1] == '\n')
+                            printf("Received message from %s: %s", clients[i].username, buffer);
+                        else
+                            printf("Received message from %s: %s\n", clients[i].username, buffer);
+
                         sprintf(tmp, "[%s]: ", clients[i].username);
                         write(clients[j].sock, tmp, strlen(tmp));
                         write(clients[j].sock, buffer, sizeof(buffer));
+                        if (buffer[strlen(buffer) - 1] != '\n')
+                            write(clients[j].sock, "\n", 1);
                     }
                 }
             }
