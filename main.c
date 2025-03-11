@@ -7,6 +7,7 @@
 #include <sys/poll.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <netdb.h>
 
 typedef struct client
 {
@@ -37,20 +38,48 @@ int main(const int argc, const char **argv)
 
     char buffer[1024];
 
-    struct sockaddr_in server_addr;
+    struct addrinfo hints, *server_addr, *p;
 
-    const int sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (sock < 0)
-        error("error creating a socket");
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_PASSIVE;
 
-    const int port = (int) strtol(argv[1], NULL, 10);
+    if (getaddrinfo(NULL, argv[1], &hints, &server_addr) != 0)
+    {
+        error("getaddrinfo error");
+    }
+
+    int sock;
+    for (p = server_addr; p != NULL; p = p->ai_next)
+    {
+        if ((sock = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+            continue;
+
+        if (bind(sock, p->ai_addr, p->ai_addrlen) == -1)
+        {
+            close(sock);
+            continue;
+        }
+
+        break;
+    }
+
+    if (p == NULL)
+        error("failed to bind");
+
+    // const int sock = socket(AF_INET, SOCK_STREAM, 0);
+    // if (sock < 0)
+    //     error("error creating a socket");
+
+    // const int port = (int) strtol(argv[1], NULL, 10);
     // Address Family - internet; supports IPv4 addresses
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(port);
-    socklen_t server_addr_size = sizeof(server_addr);
-    if (bind(sock, (const struct sockaddr *) &server_addr, server_addr_size) < 0)
-        error("error on binding");
+    // server_addr.sin_family = AF_INET;
+    // server_addr.sin_addr.s_addr = INADDR_ANY;
+    // server_addr.sin_port = htons(port);
+    // socklen_t server_addr_size = sizeof(*server_addr);
+    // if (bind(sock, (const struct sockaddr *) server_addr, server_addr_size) < 0)
+        // error("error on binding");
 
     listen(sock, 5);
     struct pollfd sock_pollfd;
@@ -67,7 +96,7 @@ int main(const int argc, const char **argv)
 
         if (poll(&sock_pollfd, 1, 0))
         {
-            const int client_sock = accept(sock, (struct sockaddr *) &server_addr, &server_addr_size);
+            const int client_sock = accept(sock, p->ai_addr, &p->ai_addrlen);
             if (client_sock < 0)
                 error("error on accept");
 
@@ -96,7 +125,7 @@ int main(const int argc, const char **argv)
 
             client_pollfd[connected_clients - 1] = tmp_poll;
 
-            write(curr_client.sock, "Enter your username: ", 21);
+            write(curr_client.sock, "ATSIUSKVARDA\n", 13);
             printf("Client connected\n");
         }
 
@@ -141,6 +170,7 @@ int main(const int argc, const char **argv)
                         clients[i].username = malloc(strlen(buffer) + 1);
                         strcpy(clients[i].username, buffer);
                         printf("Received username from client: %s\n", buffer);
+                        write(clients[i].sock, "VARDASOK\n", 10);
                         continue;
                     }
                     for (int j = 0; j < connected_clients; j++)
@@ -148,18 +178,20 @@ int main(const int argc, const char **argv)
                         if (i == j)
                             continue;
 
-                        char* tmp = malloc(2 + strlen(clients[j].username) + 1);
+                        char* tmp = malloc(15 + strlen(clients[j].username) + 1);
 
                         if (buffer[strlen(buffer) - 1] == '\n')
                             printf("Received message from %s: %s", clients[i].username, buffer);
                         else
                             printf("Received message from %s: %s\n", clients[i].username, buffer);
 
-                        sprintf(tmp, "[%s]: ", clients[i].username);
+                        sprintf(tmp, "PRANESIMAS [%s]: ", clients[i].username);
                         write(clients[j].sock, tmp, strlen(tmp));
                         write(clients[j].sock, buffer, sizeof(buffer));
                         if (buffer[strlen(buffer) - 1] != '\n')
                             write(clients[j].sock, "\n", 1);
+
+                        free(tmp);
                     }
                 }
             }
