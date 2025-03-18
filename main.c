@@ -21,7 +21,7 @@ void error(const char *msg)
     exit(1);
 }
 
-void signal_handler(int sig);
+void signal_handler(int);
 
 volatile int keep_running = 1;
 
@@ -33,7 +33,12 @@ int main(const int argc, const char **argv)
 
     if (argc != 2)
     {
-        error("Usage: ./server <port>");
+        char* tmp = malloc(14 + strlen(argv[0]) + 1);
+        sprintf(tmp, "Usage: %s <port>", argv[0]);
+
+        error(tmp);
+
+        free(tmp);
     }
 
     char buffer[1024];
@@ -67,19 +72,6 @@ int main(const int argc, const char **argv)
 
     if (p == NULL)
         error("failed to bind");
-
-    // const int sock = socket(AF_INET, SOCK_STREAM, 0);
-    // if (sock < 0)
-    //     error("error creating a socket");
-
-    // const int port = (int) strtol(argv[1], NULL, 10);
-    // Address Family - internet; supports IPv4 addresses
-    // server_addr.sin_family = AF_INET;
-    // server_addr.sin_addr.s_addr = INADDR_ANY;
-    // server_addr.sin_port = htons(port);
-    // socklen_t server_addr_size = sizeof(*server_addr);
-    // if (bind(sock, (const struct sockaddr *) server_addr, server_addr_size) < 0)
-        // error("error on binding");
 
     listen(sock, 5);
     struct pollfd sock_pollfd;
@@ -126,7 +118,7 @@ int main(const int argc, const char **argv)
             client_pollfd[connected_clients - 1] = tmp_poll;
 
             write(curr_client.sock, "ATSIUSKVARDA\n", 13);
-            printf("Client connected\n");
+            printf("Client connected. Socket fd: %d\n", curr_client.sock);
         }
 
         if (poll(client_pollfd, connected_clients, 0))
@@ -135,7 +127,7 @@ int main(const int argc, const char **argv)
             {
                 if (client_pollfd[i].revents & POLLHUP)
                 {
-                    printf("Client disconnected\n");
+                    printf("Client with socket fd %d and username %s disconnected\n", clients[i].sock, clients[i].username);
 
                     close(client_pollfd[i].fd);
                     for (int j = i; j < connected_clients - 1; j++)
@@ -162,32 +154,51 @@ int main(const int argc, const char **argv)
                 }
                 else if (client_pollfd[i].revents & POLLIN)
                 {
+                    bzero(buffer, sizeof(buffer));
                     read(clients[i].sock, buffer, sizeof(buffer) - 1);
 
                     if (clients[i].username == NULL)
                     {
-                        buffer[strlen(buffer) - 2] = '\0';
-                        clients[i].username = malloc(strlen(buffer) + 1);
-                        strcpy(clients[i].username, buffer);
-                        printf("Received username from client: %s\n", buffer);
-                        write(clients[i].sock, "VARDASOK\n", 10);
+                        if (buffer[strlen(buffer) - 2] == '\r')
+                        {
+                            buffer[strlen(buffer) - 2] = '\0';
+                        }
+                        else
+                        {
+                            buffer[strlen(buffer) - 1] = '\0';
+                        }
+
+                        if (strlen(buffer) < 3)
+                        {
+                            write(clients[i].sock, "BLOGAS VARDAS\n", 14);
+                            printf("Received bad username from client with sock id %d: %s\n", clients[i].sock, buffer);
+                        }
+                        else
+                        {
+                            clients[i].username = malloc(strlen(buffer) + 1);
+                            strcpy(clients[i].username, buffer);
+                            printf("Received username from client with sock id %d: %s\n", clients[i].sock, buffer);
+                            write(clients[i].sock, "VARDASOK\n", 9);
+                        }
+
                         continue;
                     }
                     for (int j = 0; j < connected_clients; j++)
                     {
                         if (i == j)
+                        {
+                            if (buffer[strlen(buffer) - 1] == '\n')
+                                printf("Received message from %s: %s", clients[i].username, buffer);
+                            else
+                                printf("Received message from %s: %s\n", clients[i].username, buffer);
+
                             continue;
+                        }
 
-                        char* tmp = malloc(15 + strlen(clients[j].username) + 1);
+                        char* tmp = malloc(15 + strlen(clients[i].username) + strlen(buffer) + 1);
 
-                        if (buffer[strlen(buffer) - 1] == '\n')
-                            printf("Received message from %s: %s", clients[i].username, buffer);
-                        else
-                            printf("Received message from %s: %s\n", clients[i].username, buffer);
-
-                        sprintf(tmp, "PRANESIMAS [%s]: ", clients[i].username);
+                        sprintf(tmp, "PRANESIMAS [%s]: %s", clients[i].username, buffer);
                         write(clients[j].sock, tmp, strlen(tmp));
-                        write(clients[j].sock, buffer, sizeof(buffer));
                         if (buffer[strlen(buffer) - 1] != '\n')
                             write(clients[j].sock, "\n", 1);
 
@@ -210,8 +221,9 @@ int main(const int argc, const char **argv)
     return 0;
 }
 
-void signal_handler(const int sig)
+void signal_handler(int)
 {
+    keep_running = 0;
     printf("\nServer closing...\n");
 
     exit(0);
