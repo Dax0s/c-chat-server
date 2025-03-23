@@ -31,10 +31,10 @@ int main(const int argc, const char **argv)
     act.sa_handler = signal_handler;
     sigaction(SIGINT, &act, NULL);
 
-    if (argc != 2)
+    if (argc != 4)
     {
-        char* tmp = malloc(14 + strlen(argv[0]) + 1);
-        sprintf(tmp, "Usage: %s <port>", argv[0]);
+        char* tmp = malloc(48 + strlen(argv[0]) + 1);
+        sprintf(tmp, "Usage: %s <server-name> <port> <email-server-port>", argv[0]);
 
         error(tmp);
 
@@ -50,7 +50,7 @@ int main(const int argc, const char **argv)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
 
-    if (getaddrinfo(NULL, argv[1], &hints, &server_addr) != 0)
+    if (getaddrinfo(NULL, argv[2], &hints, &server_addr) != 0)
     {
         error("getaddrinfo error");
     }
